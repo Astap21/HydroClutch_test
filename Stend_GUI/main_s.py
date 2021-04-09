@@ -411,17 +411,16 @@ class MyComThread(TryThread):
 
     def run(self):
         try:
-            ports = serial.tools.list_ports.comports()
+            comPorts = serial.tools.list_ports.comports()
             port_device = ''
-            for port in ports:
-                # STMicroelectronics Virtual COM Port
-                if str(port.description)[:3] == 'STM':
+            for port in comPorts:
+                if port.description == self.parent.b_comPorts.currentText():
                     port_device = port.device
             if port_device == '':
-                self.get_text('Устройство не найдено')
+                self.parent.get_text('Устройство не найдено')
                 return
             self.com_port_name = port_device
-            baudrate = 9600
+            baudrate = 4800
             try:
                 self.com = serial.Serial(
                     port=self.com_port_name,
@@ -719,6 +718,13 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.mySendlerTimerThread = MyTimerThread(self)
         # Ошибка COM порта
         self.ErrorComPort = False
+        #получаем список COM портов
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            self.b_comPorts.addItem(port.description)
+        # обновление списка COM портов
+        self.b_updateComPorts.clicked.connect(self.updateComPortsList)
+        #self.b_comPorts.highlighted.connect(lambda x: (print("qwer")))
         # поток для отрисовки данных
         timer = 200
         self.myPLOTthread_1 = MyPlotThread(self, timer)  # создание потока для цикла отправки
@@ -848,6 +854,11 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.moment_before = 0
         self.pressure_out_before = 0
 
+    def updateComPortsList(self):
+        self.b_comPorts.clear()
+        ports = serial.tools.list_ports.comports()
+        for myPort in ports:
+            self.b_comPorts.addItem(myPort.description)
 
     def check_crc_16(self, my_list):
         # если ошибка связано с индексом массива то возвращаем FALSE
@@ -1605,6 +1616,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                 # для отображения
                 # self.sent_message = message[:-1]
                 # self.myCOMthread.get_sent_message(self.sent_message)
+                #print(list_message)
             else:
                 self.get_text('COM порт закрыт')
                 self.disconnect_com()
