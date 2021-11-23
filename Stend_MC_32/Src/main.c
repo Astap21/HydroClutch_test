@@ -65,12 +65,14 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 uint16_t rx1_uart_counter = 0;
+uint16_t rx2_uart_counter = 0;
 xQueueHandle UART1_Rx_Que;
+xQueueHandle UART2_Rx_Que;
 portBASE_TYPE xStatus_Rx_UART1;
+portBASE_TYPE xStatus_Rx_UART2;
 uint8_t rx1_byte[9];
 uint8_t rx2_byte[4];
 uint8_t rx1_byte_len = 9;
-uint8_t flad_read_uart = 0;
 //float adcResult11 = 0;  //значение снятое с АЦП 1 канала
 //float adcResult22 = 0;  //значение снятое с АЦП 2 канала
 //float adcResult33 = 0;  //значение снятое с АЦП 3 канала
@@ -122,7 +124,7 @@ int main(void)
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
-  HAL_Delay(2000);
+  //HAL_Delay(2000);
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_RTC_Init();
@@ -132,8 +134,9 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	// Прием UART в USART1_IRQHandler
 	UART1_Rx_Que = xQueueCreate(5, sizeof(rx1_byte));
-	HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);
-	HAL_UART_Receive_IT (&huart2,(uint8_t*)&rx2_byte,4);
+	UART2_Rx_Que = xQueueCreate(5, sizeof(rx2_byte));
+	//HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);
+	//HAL_UART_Receive_IT (&huart2,(uint8_t*)&rx2_byte,4);
 	
 
   /* USER CODE END 2 */
@@ -230,21 +233,25 @@ void SystemClock_Config(void)
 uint8_t rx1_uart_counter_error = 0;
 void HAL_UART_RxCpltCallback (UART_HandleTypeDef *huart)
 {
-	if (rx1_byte[0] != 0x00){
-	  xStatus_Rx_UART1 = xQueueSendToBackFromISR(UART1_Rx_Que,&rx1_byte,0);
+	if (huart == &huart1) {
+		rx1_uart_counter ++;
+		if (rx1_byte[0] != 0x00){
+	    xStatus_Rx_UART1 = xQueueSendToBackFromISR(UART1_Rx_Que,&rx1_byte,0);
+	  }
+		for(uint8_t	 cl_i=0;cl_i<=8;cl_i++){
+		  rx1_byte[cl_i] = 0;
+	  }	  		
 	}
-	if (rx2_byte[0] != 0x00){
-	  xStatus_Rx_UART1 = xQueueSendToBackFromISR(UART1_Rx_Que,&rx2_byte,0);
-	}		
-	for(uint8_t	 cl_i=0;cl_i<=8;cl_i++){
-		rx1_byte[cl_i] = 0;
-	}
+	if (huart == &huart2) {
+		rx2_uart_counter ++;
+		if (rx2_byte[0] != 0x00){
+	    xStatus_Rx_UART2 = xQueueSendToBackFromISR(UART2_Rx_Que,&rx2_byte,0);
+	  }		
 		for(uint8_t	 cl_i=0;cl_i<=4;cl_i++){
-		rx2_byte[cl_i] = 0;
+		  rx2_byte[cl_i] = 0;
+	  }
 	}
-	rx1_uart_counter ++;
-	HAL_UART_Receive_IT (&huart2,(uint8_t*)&rx2_byte,4);
-	HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);
+
 }
 
 //	HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,rx1_byte_len);

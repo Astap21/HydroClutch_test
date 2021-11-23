@@ -2,7 +2,10 @@
 import sys
 import os
 from PyQt5 import QtWidgets, QtCore, QtGui
-import serial.tools.list_ports
+#import serial.tools.list_ports
+
+from PyQt5.QtSerialPort import QSerialPort, QSerialPortInfo
+from PyQt5.QtCore import QIODevice
 from time import sleep
 import traceback
 
@@ -377,7 +380,7 @@ class MyTimerThread(QtCore.QThread):
 
     def run(self):
         self.running = True
-        #i = 0
+        i = 0
         while self.running:
             if self.main.ErrorComPort:
                 print ("Остановка")
@@ -719,9 +722,15 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         # Ошибка COM порта
         self.ErrorComPort = False
         #получаем список COM портов
-        ports = serial.tools.list_ports.comports()
-        for port in ports:
-            self.b_comPorts.addItem(port.description)
+        # ports = serial.tools.list_ports.comports()
+        # for port in ports:
+        #     self.b_comPorts.addItem(port.description)
+        # com_port qSerial
+        self.serial = QSerialPort()
+        self.serial.setBaudRate(19200)
+        self.serial.readyRead.connect(self.readComDataQserial)
+        ports = QSerialPortInfo().availablePorts()
+        for port in ports: self.b_comPorts.addItem(port.description())
         # обновление списка COM портов
         self.b_updateComPorts.clicked.connect(self.updateComPortsList)
         #self.b_comPorts.highlighted.connect(lambda x: (print("qwer")))
@@ -729,10 +738,10 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         timer = 200
         self.myPLOTthread_1 = MyPlotThread(self, timer)  # создание потока для цикла отправки
         # создаем поток                    self.myPLOTthread_1.running = False  # Остановка опроса контроллера
-        self.myCOMthread = MyComThread(self)  # создание потока для приема по COM порту
+        #self.myCOMthread = MyComThread(self)  # создание потока для приема по COM порту
         # Обработчик сигнала от COM emit
-        self.myCOMthread.mysignal_str.connect(self.get_text, QtCore.Qt.QueuedConnection)
-        self.myCOMthread.mysignal_list.connect(self.get_data_from_mc, QtCore.Qt.QueuedConnection)
+        #self.myCOMthread.mysignal_str.connect(self.get_text, QtCore.Qt.QueuedConnection)
+        #self.myCOMthread.mysignal_list.connect(self.get_data_from_mc, QtCore.Qt.QueuedConnection)
         # Новые данные
         self.wrote_data = []
         # кнопка стоп красная старт зеленая
@@ -854,11 +863,21 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.moment_before = 0
         self.pressure_out_before = 0
 
+    @QtCore.pyqtSlot()
+    def readComDataQserial(self):
+        #print(self.serial.bytesAvailable())
+        if self.serial.bytesAvailable() == 0: return;
+        rx = self.serial.readAll()
+        #print("Прием", [ord(i) for i in rx])
+        self.get_data_from_mc(rx)
+
     def updateComPortsList(self):
         self.b_comPorts.clear()
-        ports = serial.tools.list_ports.comports()
-        for myPort in ports:
-            self.b_comPorts.addItem(myPort.description)
+        # ports = serial.tools.list_ports.comports()
+        # for myPort in ports:
+        #     self.b_comPorts.addItem(myPort.description)
+        ports = QSerialPortInfo().availablePorts()
+        for port in ports: self.b_comPorts.addItem(port.description())
 
     def check_crc_16(self, my_list):
         # если ошибка связано с индексом массива то возвращаем FALSE
@@ -1033,7 +1052,10 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
             self.com_message.append(my_byte_str[0])
         self.send_to_com()
 
-    def get_data_from_mc(self, receive_message):
+    def get_data_from_mc(self, receive_message_bytes):
+        receive_message = [ord(i) for i in receive_message_bytes]
+        #print(receive_message)
+        #print(receive_message)
         my_list = []
         #print(receive_message)
         new_message_1 = False
@@ -1041,7 +1063,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         new_message_3 = False
         try:
             # проверяем что пришли данные нужного размера
-            if ((len(receive_message) >= 4) and ((len(receive_message) >= receive_message[1]))):
+            if ((len(receive_message) >= 4) and ((len(receive_message) >= int(receive_message[1])))):
                 # если данные пришли полностью то вернет True
                 new_message_1 = self.check_crc_16(receive_message)
             # elif ((len(self.old_receive_message) > 4) and ((len(receive_message+self.old_receive_message) == receive_message[1]))):
@@ -1081,6 +1103,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
             if self.new_message:
                 # если приняли корректное сообщение сброс старого
                 self.old_receive_message = []
+                #print(my_list)
                 if my_list[0] == 0x21 and my_list[1] == 0x4:
                     self.get_text('Успешное подключение к устройству')
                     # запуск потока для опроса контроллера
@@ -1488,8 +1511,9 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
 
     def disconnect_com(self):
         self.mySendlerTimerThread.running = False # Остановка опроса контроллера
-        self.myCOMthread.running = False  # Остановить выполнение потока
-        self.myCOMthread.com.close()
+        #self.myCOMthread.running = False  # Остановить выполнение потока
+        #self.myCOMthread.com.close()
+        self.serial.close()
 
         # Надо делать кнопку Активной при успешном ответе контроллера
         self.b_load_book.setEnabled(False)  # Делаем кнопку не активной
@@ -1535,8 +1559,33 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.lineEdit_16.setText('Недоступен')
 
     def connect_com(self):
-        if not self.myCOMthread.isRunning():
-            self.myCOMthread.start()
+        ports = QSerialPortInfo().availablePorts()
+        # comPorts = serial.tools.list_ports.comports()
+        port_device = ''
+        for port in ports:
+            if port.description() == self.b_comPorts.currentText():
+                # print (port.portName())
+                port_device = port.portName()
+                self.serial.setPortName(port.portName())
+        if port_device == '':
+            self.parent.get_text('Устройство не найдено')
+            return
+        self.com_port_name = port_device
+        self.serial.setBaudRate(19200)
+        self.serial.open(QIODevice.ReadWrite)
+        if self.serial.isOpen():
+            self.get_text('Попытка подключения')
+            # Надо делать кнопку Активной при успешном ответе контроллера
+            self.b_load_book.setEnabled(True)  # Делаем кнопку активной
+            self.b_disconnect.setEnabled(True)  # Делаем кнопку активной
+
+            self.b_connect.setEnabled(False)  # Делаем кнопку не активной
+            self.data_1.set_zero()
+            # Отправка запроса подключения на устройтсво
+            self.com_message = '21 04'
+            self.send_to_com()
+        # if not self.myCOMthread.isRunning():
+        #     self.myCOMthread.start()
 
     def load_book(self):
         self.send_book()
@@ -1610,9 +1659,16 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                     one_byte = one_byte + one_char
             # только для отображения
             # message = message.upper() + crc16.upper()
-            if self.myCOMthread.com.isOpen():
+            # if self.myCOMthread.com.isOpen():
+            #     # отправка в COM порт
+            #     self.myCOMthread.com.write(list_message)
+            #print("Отправка", list_message)
+            if self.serial.isOpen():
+                #print(list_message)
                 # отправка в COM порт
-                self.myCOMthread.com.write(list_message)
+                self.serial.clear()
+                self.serial.write(bytearray(list_message))
+                self.serial.flush()
                 # для отображения
                 # self.sent_message = message[:-1]
                 # self.myCOMthread.get_sent_message(self.sent_message)

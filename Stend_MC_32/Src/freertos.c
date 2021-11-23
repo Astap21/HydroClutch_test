@@ -157,9 +157,9 @@ xQueueHandle UART1_Tx_Que;//очередь на отправку в UART1
 portBASE_TYPE xStatus_Tx_UART1;
 uint8_t tx1_buffer_que[10];//буфер для очереди на отправку в UART1
 
-xQueueHandle UART2_Tx_Que;//очередь на отправку в UART1
+xQueueHandle UART2_Tx_Que;//очередь на отправку в UART2
 portBASE_TYPE xStatus_Tx_UART2;
-uint8_t tx2_buffer_que[10];//буфер для очереди на отправку в UART1
+uint8_t tx2_buffer_que[10];//буфер для очереди на отправку в UART2
 
 HAL_StatusTypeDef TransmitStatusUART1 = HAL_TIMEOUT;
 uint16_t len_tx1_buffer = 1;
@@ -180,7 +180,6 @@ uint8_t Klapan_6_State = 0;
 HAL_StatusTypeDef TransmitStatusUSB = HAL_TIMEOUT;
 uint8_t DataToSendUSB_1[8];
 uint8_t DataToSendUSB_2[8];
-uint8_t DataToSendUSB_3[8];
 uint8_t DataToSendUSB_all[24];
 // массив с состоянием ключей
 uint8_t key_read[6];
@@ -327,7 +326,7 @@ void Send_USB(void const * argument);
 void Exper_run(void const * argument);
 //void Read_UART(void const * argument);
 void ReceiveUART1(void const * argument);
-//void ReceiveUART2(void const * argument);
+void ReceiveUART2(void const * argument);
 void CheckError(void const * argument);
 void FillLiquid(void const * argument);
 //void MeanADC(void const * argument);
@@ -383,7 +382,7 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  osThreadDef(myTask02, Read_ADC, osPriorityIdle, 0, 256);
+  osThreadDef(myTask02, Read_ADC, osPriorityIdle, 0, 128);
   myTask02Handle = osThreadCreate(osThread(myTask02), NULL);
 	
   osThreadDef(myTask03, Read_USB, osPriorityLow, 0, 256);
@@ -404,14 +403,14 @@ void MX_FREERTOS_Init(void) {
 	osThreadDef(myTask08, ReceiveUART1, osPriorityHigh, 0, 128);
   myTask08Handle = osThreadCreate(osThread(myTask08), NULL);
 	
-//	osThreadDef(myTask09, ReceiveUART2, osPriorityIdle, 0, 128);
-//  myTask08Handle = osThreadCreate(osThread(myTask08), NULL);
-	
-	osThreadDef(myTask09, CheckError, osPriorityNormal, 0, 128);
+	osThreadDef(myTask09, ReceiveUART2, osPriorityHigh, 0, 128);
   myTask09Handle = osThreadCreate(osThread(myTask09), NULL);
 	
-	osThreadDef(myTask10, FillLiquid, osPriorityLow, 0, 128);
+	osThreadDef(myTask10, CheckError, osPriorityNormal, 0, 128);
   myTask10Handle = osThreadCreate(osThread(myTask10), NULL);
+	
+	osThreadDef(myTask11, FillLiquid, osPriorityLow, 0, 128);
+  myTask11Handle = osThreadCreate(osThread(myTask11), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
@@ -820,10 +819,10 @@ void Send_USB(void const * argument)
 			//test_i = test_i + 1;
 		  DataToSendUSB_1[6] = (uint8_t)(moment >> 8);
 		  DataToSendUSB_1[7] = (uint8_t)(moment);
-			// отправка первой части сообщения
-			CDC_Transmit_FS(DataToSendUSB_1, 8);
-			// задержка, чтобы контроллер успел отправить сообщение
-			osDelay(30);
+//			// отправка первой части сообщения
+//			CDC_Transmit_FS(DataToSendUSB_1, 8);
+//			// задержка, чтобы контроллер успел отправить сообщение
+//			osDelay(30);
 			// Статус клапанов
 			key_read[0] = HAL_GPIO_ReadPin(Klapan_1);
 			key_read[1] = HAL_GPIO_ReadPin(Klapan_2);
@@ -870,10 +869,13 @@ void Send_USB(void const * argument)
 			}
 			// Контрольная сумма
 			my_crc = crc_16_ibm(DataToSendUSB_all,DataToSendUSB_1[1]-2);
-		  DataToSendUSB_2[4] = (uint8_t)(my_crc >> 8);
-		  DataToSendUSB_2[5] = (uint8_t)(my_crc);
+//		  DataToSendUSB_2[4] = (uint8_t)(my_crc >> 8);
+//		  DataToSendUSB_2[5] = (uint8_t)(my_crc);
 			// отправка сообщения
-			TransmitStatusUSB = CDC_Transmit_FS(DataToSendUSB_2, DataToSendUSB_1[1]-8);
+//			TransmitStatusUSB = CDC_Transmit_FS(DataToSendUSB_all, DataToSendUSB_1[1]-8);
+			DataToSendUSB_all[12] = (uint8_t)(my_crc >> 8);
+		  DataToSendUSB_all[13] = (uint8_t)(my_crc);
+			TransmitStatusUSB = CDC_Transmit_FS(DataToSendUSB_all, DataToSendUSB_1[1]);
 			request_data = 0;
 		}
 		// испытание завершено ошибок нет
@@ -1067,15 +1069,16 @@ void Send_UART1(void const * argument)
 	// его дописываем руками в приеме
 	//osDelay(3);	
 	HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_RESET);
-	//HAL_UART_Receive(&huart1,(uint8_t*)&rx1_byte,9,100);
-	HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);
-	//osDelay(50);	
+//	osDelay(50);
+//	HAL_UART_Receive(&huart1,(uint8_t*)&rx1_byte,9,100);
+//	osDelay(50);
+	HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);		
   }
   /* USER CODE END Send_UART1 */
 }
 void Send_UART2(void const * argument)
 {
-  /* USER CODE BEGIN Send_UART1 */
+  /* USER CODE BEGIN Send_UART2 */
   /* Infinite loop */
   for(;;)
   {
@@ -1085,9 +1088,12 @@ void Send_UART2(void const * argument)
 		ClearBuffer(tx2_buffer_go,&len_tx2_buffer);
 		osDelay(50);
 	}
-  //HAL_UART_Receive(&huart2,(uint8_t*)&rx2_byte,4,100);	
+//	osDelay(50);
+//	HAL_UART_Receive(&huart2,(uint8_t*)&rx2_byte,4,100);
+//	osDelay(50);
+	HAL_UART_Receive_IT (&huart2,(uint8_t*)&rx2_byte,4);	
   }
-  /* USER CODE END Send_UART1 */
+  /* USER CODE END Send_UART2 */
 }
 void ReceiveUART1(void const * argument)
 {
@@ -1100,12 +1106,6 @@ void ReceiveUART1(void const * argument)
   for(;;)
   {
 		xStatus_Rx_UART1 = xQueueReceive(UART1_Rx_Que, &rx1_byte_rtos, portMAX_DELAY );
-		//Считываем давление
-		if (rx1_byte_rtos[0] == 0x04 && rx1_byte_rtos[1] == 0xBF) {
-			pressure_not_connected = 0;
-			pressure_wait_answer = 0;
-			pressure=((uint16_t)rx1_byte_rtos[2] << 8) | rx1_byte_rtos[3];
-		}
 		//считываем момент
 		//так как первый байт не принимаем, пишем его руками и ПОЭТОМУ ПРИМАЕМ ПО 8 БАЙТ
 		//rx1_message[0] = 0x05;
@@ -1179,41 +1179,26 @@ void ReceiveUART1(void const * argument)
   }
   /* USER CODE END ReceiveCommand */
 }
-/*
-void Read_UART(void const * argument)
+void ReceiveUART2(void const * argument)
 {
-  // USER CODE BEGIN InitAndReadCommand 
-  // Infinite loop 
+  /* USER CODE BEGIN ReceiveCommand */
+	uint8_t rx2_byte_rtos[4];
+//	uint8_t uart2_i = 0;
+	//uint8_t rx2_byte_rtos[4];
+	//uint8_t uart2_i = 0;
+  /* Infinite loop */
   for(;;)
   {
-		if (rx1_buffer_count > 0){
-			i = 0;
-			osDelay(10);
-			for (i=0; i<rx1_buffer_count; i++){
-				rx1_message[i] = rx1_buffer[i];
-				rx1_buffer[i] = 0;
-			}
-			rx1_message_count = rx1_buffer_count;
-			rx1_buffer_count = 0;
-	  }
-		new_message_flag_uart = Check_crc_16_modbus(rx1_message,rx1_message_count);
-	  if (new_message_flag_uart == 1)
-		{
-			// D6 6D 42 9E
-		 //bytes = {0x6D,0xD6,0x9E,0x42};
-			bytes[0]=rx1_message[4];
-			bytes[1]=rx1_message[3];
-			bytes[2]=rx1_message[6];
-			bytes[3]=rx1_message[5];
-			moment_float =*(float *)&bytes;
-			// умножаем на 2, чтоб была точность 0.5
-			moment = roundf(moment_float*2);
-      new_message_flag_uart = 0;
-	  }
-		osDelay(90);
-	}
+		xStatus_Rx_UART2 = xQueueReceive(UART2_Rx_Que, &rx2_byte_rtos, portMAX_DELAY );
+		//Считываем давление
+		if (rx2_byte_rtos[0] == 0x04 && rx2_byte_rtos[1] == 0xBF) {
+			pressure_not_connected = 0;
+			pressure_wait_answer = 0;
+			pressure=((uint16_t)rx2_byte_rtos[2] << 8) | rx2_byte_rtos[3];
+		}
+  }
+  /* USER CODE END ReceiveCommand */
 }
-*/
 uint16_t cl_i =0;
 void ClearBuffer(uint8_t *buffer,uint16_t *len_buffer)
 { 
