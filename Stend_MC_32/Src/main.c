@@ -71,7 +71,7 @@ xQueueHandle UART2_Rx_Que;
 portBASE_TYPE xStatus_Rx_UART1;
 portBASE_TYPE xStatus_Rx_UART2;
 uint8_t rx1_byte[9];
-uint8_t rx2_byte[4];
+uint8_t rx2_byte[10];
 uint8_t rx1_byte_len = 9;
 //float adcResult11 = 0;  //значение снятое с АЦП 1 канала
 //float adcResult22 = 0;  //значение снятое с АЦП 2 канала
@@ -243,10 +243,12 @@ void HAL_UART_RxCpltCallback (UART_HandleTypeDef *huart)
 	  }	  		
 	}
 	if (huart == &huart2) {
+		HAL_UART_Receive_IT (&huart2,rx2_byte,4);
 		rx2_uart_counter ++;
-		if (rx2_byte[0] != 0x00){
+		if (rx2_byte[0] == 0x04 || rx2_byte[0] == 0x05 || rx2_byte[0] == 0x03){
 	    xStatus_Rx_UART2 = xQueueSendToBackFromISR(UART2_Rx_Que,&rx2_byte,0);
-	  }		
+	  }
+		else HAL_Delay(10);		//без этой задержки прием переодически отключается
 		for(uint8_t	 cl_i=0;cl_i<=4;cl_i++){
 		  rx2_byte[cl_i] = 0;
 	  }

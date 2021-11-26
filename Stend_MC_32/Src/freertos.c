@@ -166,8 +166,8 @@ uint16_t len_tx1_buffer = 1;
 uint8_t tx1_buffer_go[10];
 
 HAL_StatusTypeDef TransmitStatusUART2 = HAL_TIMEOUT;
-uint16_t len_tx2_buffer = 1;
-uint8_t tx2_buffer_go[10];
+uint16_t len_tx2_buffer = 0;
+uint8_t tx2_buffer_go[4];
 
 uint8_t test1 = 0;
 // Статус включения двигателя
@@ -541,6 +541,7 @@ void StartDefaultTask(void const * argument)
 			//HAL_UART_Receive_IT (&huart2,(uint8_t*)&rx2_byte,4);
 		}
 		else pressure_not_connected = 0;
+		if (pressure_wait_answer >= 5) HAL_UART_Receive_IT (&huart2,rx2_byte,1);
 		//Инкрементируем переменную ждем ответа
 		// Обнуляем ее в приеме
 		pressure_wait_answer ++;
@@ -1056,10 +1057,10 @@ void Send_UART1(void const * argument)
 	uint8_t rx_test_bytes[64];
   for(;;)
   {
-  xStatus_Tx_UART1 = xQueueReceive(UART1_Tx_Que, &tx1_buffer_go, portMAX_DELAY );	
-	HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_SET);
-	TransmitStatusUART1 = HAL_UART_Transmit(&huart1,(uint8_t*)tx1_buffer_go, len_tx1_buffer, 10);
-	if (TransmitStatusUART1 == HAL_OK)
+    xStatus_Tx_UART1 = xQueueReceive(UART1_Tx_Que, &tx1_buffer_go, portMAX_DELAY );	
+	  HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_SET);
+	  TransmitStatusUART1 = HAL_UART_Transmit(&huart1,(uint8_t*)tx1_buffer_go, len_tx1_buffer, 10);
+	  if (TransmitStatusUART1 == HAL_OK)
 		{
 			ClearBuffer(tx1_buffer_go,&len_tx1_buffer);
 	  }
@@ -1068,11 +1069,11 @@ void Send_UART1(void const * argument)
 	// но и с ней херово работает, не принимает первый байт, адрес устройства и ПОЭТОМУ ПРИМАЕМ ПО 8 БАЙТ
 	// его дописываем руками в приеме
 	//osDelay(3);	
-	HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_RESET);
+	  HAL_GPIO_WritePin(GPIOA,GPIO_PIN_8,GPIO_PIN_RESET);	
 //	osDelay(50);
 //	HAL_UART_Receive(&huart1,(uint8_t*)&rx1_byte,9,100);
 //	osDelay(50);
-	HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);		
+	  HAL_UART_Receive_IT (&huart1,(uint8_t*)&rx1_byte,9);		
   }
   /* USER CODE END Send_UART1 */
 }
@@ -1081,17 +1082,16 @@ void Send_UART2(void const * argument)
   /* USER CODE BEGIN Send_UART2 */
   /* Infinite loop */
   for(;;)
-  {
-  xStatus_Tx_UART2 = xQueueReceive(UART2_Tx_Que, &tx2_buffer_go, portMAX_DELAY );
-	TransmitStatusUART2 = HAL_UART_Transmit(&huart2,(uint8_t*)tx2_buffer_go, len_tx2_buffer, 10);
-	if (TransmitStatusUART2 == HAL_OK){
-		ClearBuffer(tx2_buffer_go,&len_tx2_buffer);
-		osDelay(50);
-	}
-//	osDelay(50);
+  {	
+		//	osDelay(50);
 //	HAL_UART_Receive(&huart2,(uint8_t*)&rx2_byte,4,100);
 //	osDelay(50);
-	HAL_UART_Receive_IT (&huart2,(uint8_t*)&rx2_byte,4);	
+	  HAL_UART_Receive_IT (&huart2,rx2_byte,4);
+    xStatus_Tx_UART2 = xQueueReceive(UART2_Tx_Que, &tx2_buffer_go, portMAX_DELAY );
+	  TransmitStatusUART2 = HAL_UART_Transmit(&huart2,(uint8_t*)tx2_buffer_go, len_tx2_buffer, 10);
+	  if (TransmitStatusUART2 == HAL_OK){
+		  ClearBuffer(tx2_buffer_go,&len_tx2_buffer);
+	  }
   }
   /* USER CODE END Send_UART2 */
 }

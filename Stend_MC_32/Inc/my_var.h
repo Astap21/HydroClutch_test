@@ -81,7 +81,7 @@
 
 
 extern uint8_t rx1_byte[9];
-extern uint8_t rx2_byte[4];
+extern uint8_t rx2_byte[10];
 
 extern xQueueHandle UART1_Rx_Que;
 extern portBASE_TYPE xStatus_Rx_UART1;

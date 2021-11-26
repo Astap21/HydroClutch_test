@@ -731,6 +731,8 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.serial.readyRead.connect(self.readComDataQserial)
         ports = QSerialPortInfo().availablePorts()
         for port in ports: self.b_comPorts.addItem(port.description())
+        self.rxTimerCounter = 0
+        self.reconnectCounter = 0
         # обновление списка COM портов
         self.b_updateComPorts.clicked.connect(self.updateComPortsList)
         #self.b_comPorts.highlighted.connect(lambda x: (print("qwer")))
@@ -866,10 +868,12 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
     @QtCore.pyqtSlot()
     def readComDataQserial(self):
         #print(self.serial.bytesAvailable())
+        self.rxTimerCounter = 0
         if self.serial.bytesAvailable() == 0: return;
-        rx = self.serial.readAll()
-        #print("Прием", [ord(i) for i in rx])
-        self.get_data_from_mc(rx)
+        if self.serial.bytesAvailable() >= 4:
+            rx = self.serial.readAll()
+            #print("Прием", [ord(i) for i in rx])
+            self.get_data_from_mc(rx)
 
     def updateComPortsList(self):
         self.b_comPorts.clear()
@@ -1106,6 +1110,8 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                 #print(my_list)
                 if my_list[0] == 0x21 and my_list[1] == 0x4:
                     self.get_text('Успешное подключение к устройству')
+                    self.reconnectCounter = 0
+                    self.rxTimerCounter = 0
                     # запуск потока для опроса контроллера
                     if not self.mySendlerTimerThread.isRunning():
                         self.mySendlerTimerThread.start()
@@ -1662,20 +1668,32 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
             # if self.myCOMthread.com.isOpen():
             #     # отправка в COM порт
             #     self.myCOMthread.com.write(list_message)
+            # if (self.rxTimerCounter >= 10) and (self.reconnectCounter == 0):
+            #     self.reconnectCounter = 1
+            #     self.get_text('Связь с устройством потеряна')
+            #     self.serial.close()
+            # if (self.rxTimerCounter >= 20):
+            #     #self.get_text('Попытка переподключения')
+            #     self.connect_com()
+            #     self.rxTimerCounter = 20
+            # self.rxTimerCounter = self.rxTimerCounter + 1
+            # print(self.rxTimerCounter)
             #print("Отправка", list_message)
             if self.serial.isOpen():
                 #print(list_message)
                 # отправка в COM порт
+                # print(self.reconnectCounter)
                 self.serial.clear()
                 self.serial.write(bytearray(list_message))
                 self.serial.flush()
+
                 # для отображения
                 # self.sent_message = message[:-1]
                 # self.myCOMthread.get_sent_message(self.sent_message)
                 #print(list_message)
-            else:
-                self.get_text('COM порт закрыт')
-                self.disconnect_com()
+            # else:
+            #     self.get_text('COM порт закрыт')
+            #     self.disconnect_com()
         except ValueError:
             self.get_text('Ошибка формата данных')
         except AttributeError:
