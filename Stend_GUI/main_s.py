@@ -390,6 +390,7 @@ class MyTimerThread(QtCore.QThread):
                 #i = i + 1
                 #print ("Запрос Данных ",i)
                 self.main.com_message = [0xBF, 0x04]
+                self.main.requestData_14byte = True
                 self.main.send_to_com()
                 self.msleep(self.time_delay_ms)
 
@@ -721,6 +722,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.mySendlerTimerThread = MyTimerThread(self)
         # Ошибка COM порта
         self.ErrorComPort = False
+        self.requestData_14byte = False
         #получаем список COM портов
         # ports = serial.tools.list_ports.comports()
         # for port in ports:
@@ -869,7 +871,11 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
     def readComDataQserial(self):
         #print(self.serial.bytesAvailable())
         self.rxTimerCounter = 0
-        if self.serial.bytesAvailable() == 0: return;
+        if self.requestData_14byte and self.serial.bytesAvailable() == 14:
+            rx = self.serial.readAll()
+            self.requestData_14byte = False
+            #print("Прием", [ord(i) for i in rx])
+            self.get_data_from_mc(rx)
         if self.serial.bytesAvailable() >= 4:
             rx = self.serial.readAll()
             #print("Прием", [ord(i) for i in rx])
@@ -1211,6 +1217,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                     else:
                         self.lineEdit_11.setText('Выключен')
                         self.lineEdit_11.setStyleSheet("color: rgb(0, 0, 255);")
+                    #print(my_list[9])
                     if my_list[9] | 0xFD == 0xFF:
                         self.lineEdit_13.setText('Включен')
                         self.lineEdit_13.setStyleSheet("color: rgb(0, 255, 0);")
@@ -1234,8 +1241,8 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                     else:
                         self.lineEdit_16.setText('Установлена')
                         self.lineEdit_16.setStyleSheet("color: rgb(0, 255, 0);")
-                    # запись температуры
-                    self.temperature = my_list[10]
+                    # запись температуры со сдвигом на 50 градусов
+                    self.temperature = my_list[10] - 50
                     self.lineEdit_8.setText(str(self.temperature) + ' °C')
                     # запись средней температуры
                     if len(self.data_1.column_3) > 0:

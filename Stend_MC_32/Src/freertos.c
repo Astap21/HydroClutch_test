@@ -442,6 +442,7 @@ void StartDefaultTask(void const * argument)
 	uint8_t i_adc_t = 0; 
 	
 	uint8_t pressure_error_counter = 0;
+	float temperature_Float = 0;
   /* USER CODE BEGIN StartDefaultTask */
 	
   /* Infinite loop */
@@ -453,8 +454,11 @@ void StartDefaultTask(void const * argument)
 		  true_temp_sensor = (sum_temp_sensor/100.0);
 			// если на АЦП 0, то температура 0
 		  if (true_temp_sensor != 0) {
-				temperature = (uint8_t)roundf(((true_temp_sensor*TEMP_k) + TEMP_b));
-				test_i = roundf(((true_temp_sensor*TEMP_k) + TEMP_b));
+				temperature_Float = ((true_temp_sensor*TEMP_k) + TEMP_b);
+				if (temperature_Float <= -50) temperature_Float = 50;
+				if (temperature_Float >= 205) temperature_Float = 205;
+				temperature = (uint8_t)roundf(temperature_Float + 50);
+				//test_i = roundf(((true_temp_sensor*TEMP_k) + TEMP_b));
 			}
 		  else temperature = 0;
 		  sum_temp_sensor = 0;
