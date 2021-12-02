@@ -19,6 +19,8 @@ import xlrd
 import xlwt
 import glob
 
+from queue import Queue
+
 
 # для отлавливания ошибок
 def log_uncaught_exceptions(ex_cls, ex, tb):
@@ -388,15 +390,38 @@ class MyTimerThread(QtCore.QThread):
             else:
                 #i = i + 1
                 #print ("Запрос Данных ",i)
+                self.main.rxTimerCounter += 1
+                self.msleep(self.time_delay_ms)
                 self.main.com_message = [0xBF, 0x04]
                 self.main.requestData_14byte = True
                 self.main.send_to_com()
-                self.msleep(self.time_delay_ms)
-
 
     def __del__(self):
         self.wait()
 
+class txSerialQueueThread(QtCore.QThread):
+
+    def __init__(self, root):
+        QtCore.QThread.__init__(self, parent=None)
+        self.main = root
+
+    def run(self):
+        self.running = True
+        #print("123")
+        while self.running:
+            time.sleep(0.05)
+            if self.main.serial.isOpen():
+                #print("qweq")
+                if not self.main.txSerialQueue.empty():
+                    txDataForTx = self.main.txSerialQueue.get()  # Get string from queue
+                    self.main.serial.clear()
+                    self.main.serial.write(txDataForTx)
+                    self.main.serial.waitForBytesWritten()
+            else:
+                self.exit()
+
+    def __del__(self):
+        self.wait()
 
 # прием данных по COM порту
 class MyComThread(TryThread):
@@ -732,6 +757,10 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         self.serial.readyRead.connect(self.readComDataQserial)
         ports = QSerialPortInfo().availablePorts()
         for port in ports: self.b_comPorts.addItem(port.description())
+        #создаем очередь для отправки сообщений
+        self.txSerialQueue = Queue()
+        # поток для отправки очереди
+        self.txSerialQueueThreadObject = txSerialQueueThread(self)
         self.rxTimerCounter = 0
         self.reconnectCounter = 0
         # обновление списка COM портов
@@ -1582,7 +1611,6 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         if port_device == '':
             self.parent.get_text('Устройство не найдено')
             return
-        self.com_port_name = port_device
         self.serial.setBaudRate(19200)
         self.serial.open(QIODevice.ReadWrite)
         if self.serial.isOpen():
@@ -1593,6 +1621,11 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
 
             self.b_connect.setEnabled(False)  # Делаем кнопку не активной
             self.data_1.set_zero()
+            #запуск потока на отправку
+            if not self.txSerialQueueThreadObject.isRunning():
+                self.txSerialQueueThreadObject.start()
+            #self.txSerialQueueThreadObject.run()
+            #print("qweqwqwr")
             # Отправка запроса подключения на устройтсво
             self.com_message = '21 04'
             self.send_to_com()
@@ -1669,29 +1702,22 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                     one_byte = ''
                 else:
                     one_byte = one_byte + one_char
-            # только для отображения
-            # message = message.upper() + crc16.upper()
-            # if self.myCOMthread.com.isOpen():
-            #     # отправка в COM порт
-            #     self.myCOMthread.com.write(list_message)
-            # if (self.rxTimerCounter >= 10) and (self.reconnectCounter == 0):
-            #     self.reconnectCounter = 1
-            #     self.get_text('Связь с устройством потеряна')
-            #     self.serial.close()
-            # if (self.rxTimerCounter >= 20):
-            #     #self.get_text('Попытка переподключения')
-            #     self.connect_com()
-            #     self.rxTimerCounter = 20
-            # self.rxTimerCounter = self.rxTimerCounter + 1
-            # print(self.rxTimerCounter)
-            #print("Отправка", list_message)
             if self.serial.isOpen():
+                #print("Отправка", list_message)
                 #print(list_message)
                 # отправка в COM порт
                 # print(self.reconnectCounter)
-                self.serial.clear()
-                self.serial.write(bytearray(list_message))
-                self.serial.waitForBytesWritten()
+                self.txSerialQueue.put(bytearray(list_message))
+            if (self.rxTimerCounter >= 10) and (self.reconnectCounter == 0):
+                self.reconnectCounter = 1
+                self.get_text('Связь с устройством потеряна')
+                self.serial.close()
+            if (self.rxTimerCounter >= 20):
+                #self.get_text('Попытка переподключения')
+                self.connect_com()
+                self.rxTimerCounter = 20
+            # self.rxTimerCounter = self.rxTimerCounter + 1
+            # print(self.rxTimerCounter)
 
                 # для отображения
                 # self.sent_message = message[:-1]
@@ -1703,7 +1729,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
         except ValueError:
             self.get_text('Ошибка формата данных')
         except AttributeError:
-            self.get_text('объeкт COM port не создан')
+            self.get_text('Объект COM port не создан')
             self.ErrorComPort = True
         except:
             self.get_text('Связь с устройством потеряна')
