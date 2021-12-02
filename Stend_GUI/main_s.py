@@ -380,10 +380,9 @@ class MyTimerThread(QtCore.QThread):
 
     def run(self):
         self.running = True
-        i = 0
         while self.running:
             if self.main.ErrorComPort:
-                print ("Остановка")
+                print("Остановка")
                 self.main.ErrorComPort = False
                 self.running = False
             else:
@@ -1692,7 +1691,7 @@ class MyWindow(QtWidgets.QMainWindow, My_1_form.Ui_Stand):
                 # print(self.reconnectCounter)
                 self.serial.clear()
                 self.serial.write(bytearray(list_message))
-                self.serial.flush()
+                self.serial.waitForBytesWritten()
 
                 # для отображения
                 # self.sent_message = message[:-1]
